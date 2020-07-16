@@ -12,18 +12,21 @@ module bp_me_cache_slice
  import bp_me_pkg::*;
  #(parameter bp_params_e bp_params_p = e_bp_inv_cfg
    `declare_bp_proc_params(bp_params_p)
-   `declare_bp_me_if_widths(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p)
+
+   , parameter uce_mem_data_width_p = "inv"
+   `declare_bp_mem_if_widths(paddr_width_p, uce_mem_data_width_p, lce_id_width_p, lce_assoc_p, uce_mem)
+   `declare_bp_mem_if_widths(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p, cce_mem)
 
    , localparam cfg_bus_width_lp = `bp_cfg_bus_width(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p, cce_pc_width_p, cce_instr_width_p)
    )
   (input                                clk_i
    , input                              reset_i
 
-   , input [cce_mem_msg_width_lp-1:0]   mem_cmd_i
+   , input [uce_mem_msg_width_lp-1:0]   mem_cmd_i
    , input                              mem_cmd_v_i
    , output                             mem_cmd_ready_o
 
-   , output [cce_mem_msg_width_lp-1:0]  mem_resp_o
+   , output [uce_mem_msg_width_lp-1:0]  mem_resp_o
    , output                             mem_resp_v_o
    , input                              mem_resp_yumi_i
 
@@ -36,15 +39,14 @@ module bp_me_cache_slice
    , output                             mem_resp_ready_o
    );
 
-  `declare_bp_me_if(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p)
-
   `declare_bsg_cache_pkt_s(paddr_width_p, dword_width_p);
   bsg_cache_pkt_s cache_pkt_li;
   logic cache_pkt_v_li, cache_pkt_ready_lo;
   logic [dword_width_p-1:0] cache_data_lo;
   logic cache_data_v_lo, cache_data_yumi_li;
   bp_me_cce_to_cache
-   #(.bp_params_p(bp_params_p))
+   #(.bp_params_p(bp_params_p)
+    ,.uce_mem_data_width_p(uce_mem_data_width_p))
    cce_to_cache
     (.clk_i(clk_i)
      ,.reset_i(reset_i)

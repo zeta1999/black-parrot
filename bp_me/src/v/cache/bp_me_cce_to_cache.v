@@ -1,6 +1,6 @@
 /*
  * bp_me_cce_to_cache.v
- *
+ * 
  */
  
 `include "bp_me_cce_mem_if.vh"
@@ -14,13 +14,14 @@ module bp_me_cce_to_cache
   import bsg_cache_pkg::*;
 
   #(parameter bp_params_e bp_params_p = e_bp_inv_cfg
+    , parameter uce_mem_data_width_p = "inv"
     `declare_bp_proc_params(bp_params_p)
-    `declare_bp_me_if_widths(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p)
+    `declare_bp_mem_if_widths(paddr_width_p, uce_mem_data_width_p, lce_id_width_p, lce_assoc_p, uce_mem)
 
-    , parameter block_size_in_words_lp=cce_block_width_p/dword_width_p
+    , parameter cce_data_size_in_words_lp=uce_mem_data_width_p/dword_width_p
     , parameter lg_sets_lp=`BSG_SAFE_CLOG2(l2_sets_p)
     , parameter lg_ways_lp=`BSG_SAFE_CLOG2(l2_assoc_p)
-    , parameter word_offset_width_lp=`BSG_SAFE_CLOG2(block_size_in_words_lp)
+    , parameter word_offset_width_lp=`BSG_SAFE_CLOG2(cce_block_width_p/dword_width_p)
     , parameter data_mask_width_lp=(dword_width_p>>3)
     , parameter byte_offset_width_lp=`BSG_SAFE_CLOG2(dword_width_p>>3)
     , parameter block_offset_width_lp=(word_offset_width_lp+byte_offset_width_lp)
@@ -33,11 +34,11 @@ module bp_me_cce_to_cache
     , input reset_i
 
     // manycore-side
-    , input  [cce_mem_msg_width_lp-1:0]   mem_cmd_i
+    , input  [uce_mem_msg_width_lp-1:0]   mem_cmd_i
     , input                               mem_cmd_v_i
     , output logic                        mem_cmd_ready_o
                                           
-    , output [cce_mem_msg_width_lp-1:0]   mem_resp_o
+    , output [uce_mem_msg_width_lp-1:0]   mem_resp_o
     , output logic                        mem_resp_v_o
     , input                               mem_resp_yumi_i
 
@@ -57,7 +58,7 @@ module bp_me_cce_to_cache
   `declare_bsg_cache_pkt_s(paddr_width_p, dword_width_p);
   
   // cce logics
-  `declare_bp_me_if(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p);
+  `declare_bp_mem_if(paddr_width_p, uce_mem_data_width_p, lce_id_width_p, lce_assoc_p, uce_mem);
   
   bsg_cache_pkt_s cache_pkt;
   assign cache_pkt_o = cache_pkt;
@@ -75,16 +76,16 @@ module bp_me_cce_to_cache
   logic [counter_width_lp-1:0] cmd_counter_r, cmd_counter_n;
   logic [counter_width_lp-1:0] cmd_max_count_r, cmd_max_count_n;
   
-  bp_cce_mem_msg_s mem_cmd_cast_i, mem_resp_cast_o;
+  bp_uce_mem_msg_s mem_cmd_cast_i, mem_resp_cast_o;
   
   assign mem_cmd_cast_i = mem_cmd_i;
   assign mem_resp_o = mem_resp_cast_o;
   
   logic mem_cmd_ready_lo;
-  bp_cce_mem_msg_s mem_cmd_lo;
+  bp_uce_mem_msg_s mem_cmd_lo;
   logic mem_cmd_v_lo, mem_cmd_yumi_li;
   bsg_fifo_1r1w_small
-   #(.width_p(cce_mem_msg_width_lp), .els_p(l2_outstanding_reqs_p))
+   #(.width_p(uce_mem_msg_width_lp), .els_p(l2_outstanding_reqs_p))
    cmd_fifo
     (.clk_i(clk_i)
     ,.reset_i(reset_i)
@@ -98,7 +99,7 @@ module bp_me_cce_to_cache
     ,.yumi_i(mem_cmd_yumi_li)
     );
   wire [paddr_width_p-1:0] cmd_addr = mem_cmd_lo.header.addr;
-  wire [block_size_in_words_lp-1:0][dword_width_p-1:0] cmd_data = mem_cmd_lo.data;
+  wire [cce_data_size_in_words_lp-1:0][dword_width_p-1:0] cmd_data = mem_cmd_lo.data;
 
   // synopsys sync_set_reset "reset_i"
   always_ff @(posedge clk_i) begin
@@ -186,8 +187,8 @@ module bp_me_cce_to_cache
       SEND: begin
         v_o = 1'b1;
         case (mem_cmd_lo.header.msg_type)
-          e_cce_mem_rd
-          ,e_cce_mem_uc_rd:
+          e_mem_msg_rd
+          ,e_mem_msg_uc_rd:
             case (mem_cmd_lo.header.size)
               e_mem_msg_size_1: cache_pkt.opcode = LB;
               e_mem_msg_size_2: cache_pkt.opcode = LH;
@@ -198,8 +199,8 @@ module bp_me_cce_to_cache
               ,e_mem_msg_size_64: cache_pkt.opcode = LM;
               default: cache_pkt.opcode = LB;
             endcase
-          e_cce_mem_uc_wr
-          ,e_cce_mem_wr   :
+          e_mem_msg_uc_wr
+          ,e_mem_msg_wr   :
             case (mem_cmd_lo.header.size)
               e_mem_msg_size_1: cache_pkt.opcode = SB;
               e_mem_msg_size_2: cache_pkt.opcode = SH;
@@ -252,7 +253,7 @@ module bp_me_cce_to_cache
   logic [counter_width_lp-1:0] resp_max_count_r, resp_max_count_n;
   
   logic [dword_width_p-1:0] resp_data_n;
-  logic [block_size_in_words_lp-1:0][dword_width_p-1:0] resp_data_r;
+  logic [cce_data_size_in_words_lp-1:0][dword_width_p-1:0] resp_data_r;
 
   // synopsys sync_set_reset "reset_i"
   always_ff @(posedge clk_i) begin
@@ -270,7 +271,7 @@ module bp_me_cce_to_cache
   end
 
   bsg_dff_en
-   #(.width_p(cce_mem_msg_width_lp-cce_block_width_p))
+   #(.width_p(uce_mem_msg_width_lp-uce_mem_data_width_p))
    resp_header_reg
     (.clk_i(clk_i)
      ,.en_i(mem_cmd_yumi_li)
