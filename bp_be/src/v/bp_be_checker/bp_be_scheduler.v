@@ -51,6 +51,10 @@ module bp_be_scheduler
   , output                             fe_queue_clr_o
   , output                             fe_queue_roll_o
   , output                             fe_queue_deq_o
+  , input [reg_addr_width_p-1:0]       rs1_addr_i
+  , input                              rs1_v_i
+  , input [reg_addr_width_p-1:0]       rs2_addr_i
+  , input                              rs2_v_i
 
   // Dispatch interface
   , output [dispatch_pkt_width_lp-1:0] dispatch_pkt_o
@@ -170,6 +174,16 @@ module bp_be_scheduler
   assign fe_queue_roll_o = cache_miss_v_i;
   assign fe_queue_deq_o  = ~cache_miss_v_i & cmt_v_i;
 
+  logic [dword_width_p-1:0] rs1_addr_r, rs2_addr_r;
+  bsg_dff
+   #(.width_p(2*reg_addr_width_p))
+   queue_reg
+    (.clk_i(clk_i)
+
+     ,.data_i({rs2_addr_i, rs1_addr_i})
+     ,.data_o({rs2_addr_r, rs1_addr_r})
+     );
+
   logic [dword_width_p-1:0] irf_rs1;
   logic [dword_width_p-1:0] irf_rs2;
   bp_be_regfile
@@ -185,9 +199,7 @@ module bp_be_scheduler
      ,.rs_r_v_i({issue_v & issue_pkt.irs2_v
                  ,issue_v & issue_pkt.irs1_v
                  })
-     ,.rs_addr_i({issue_pkt.instr.t.rtype.rs2_addr
-                  ,issue_pkt.instr.t.rtype.rs1_addr
-                  })
+     ,.rs_addr_i({rs2_addr_r, rs1_addr_r})
      ,.rs_data_o({irf_rs2, irf_rs1})
      );
 

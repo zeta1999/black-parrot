@@ -37,6 +37,10 @@ module bp_be_top
    , output                                          fe_queue_clr_o
    , output                                          fe_queue_deq_o
    , output                                          fe_queue_roll_o
+   , input [reg_addr_width_p-1:0]                    rs1_addr_i
+   , input                                           rs1_v_i
+   , input [reg_addr_width_p-1:0]                    rs2_addr_i
+   , input                                           rs2_v_i
 
    // FE cmd interface
    , output [fe_cmd_width_lp-1:0]                    fe_cmd_o
@@ -177,7 +181,10 @@ module bp_be_top
      ,.fe_queue_clr_o(fe_queue_clr_o)
      ,.fe_queue_roll_o(fe_queue_roll_o)
      ,.fe_queue_deq_o(fe_queue_deq_o)
-
+     ,.rs1_addr_i(rs1_addr_i)
+     ,.rs1_v_i(rs1_v_i)
+     ,.rs2_addr_i(rs2_addr_i)
+     ,.rs2_v_i(rs2_v_i)
 
      ,.dispatch_pkt_o(dispatch_pkt)
 
